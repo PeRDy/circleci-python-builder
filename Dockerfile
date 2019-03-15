@@ -9,7 +9,7 @@ COPY requirements.txt $APPDIR/
 
 RUN apt-get update && \
     apt-get install -y $BUILD_PACKAGES && \
-    python -m pip install --upgrade pip poetry && \
+    python -m pip install --no-cache-dir --upgrade pip poetry && \
     python -m pip install --no-cache-dir -r requirements.txt && \
     apt-get purge -y --auto-remove $BUILD_PACKAGES && \
     apt-get clean && \
