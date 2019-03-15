@@ -7,6 +7,8 @@ ENV PYTHONPATH=$APPDIR:$PYTHONPATH
 ENV BUILD_PACKAGES build-essential
 ENV RUNTIME_PACKAGES curl
 
+USER root
+
 # Install system dependencies
 RUN apt-get update && \
     apt-get install -y $RUNTIME_PACKAGES && \
@@ -32,5 +34,7 @@ RUN apt-get update && \
         /var/lib/apt/lists/* \
         /tmp/* \
         /var/tmp/*
+
+USER circleci
 
 ENTRYPOINT ["python"]
