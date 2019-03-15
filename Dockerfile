@@ -1,25 +1,9 @@
 FROM circleci/python:latest
 LABEL maintainer="Perdy <perdy@perdy.io>"
 
-ENV LC_ALL='C.UTF-8' PYTHONIOENCODING='utf-8'
-ENV APPDIR=/etc/builder/
 ENV PYTHONPATH=$APPDIR:$PYTHONPATH
-ENV BUILD_PACKAGES build-essential
-ENV RUNTIME_PACKAGES curl
 
 USER root
-
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y $RUNTIME_PACKAGES && \
-    rm -rf \
-        /var/lib/apt/lists/* \
-        /tmp/* \
-        /var/tmp/*
-
-# Create initial dirs
-RUN mkdir -p $APPDIR
-WORKDIR $APPDIR
 
 COPY requirements.txt $APPDIR/
 
@@ -36,5 +20,3 @@ RUN apt-get update && \
         /var/tmp/*
 
 USER circleci
-
-ENTRYPOINT ["python"]
