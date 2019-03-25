@@ -34,7 +34,9 @@ def build(*args, **kwargs) -> List[List[str]]:
 @command(
     command_type=Type.SHELL,
     args=((("--extra-tag",), {"help": "Create additional tags", "nargs": "*"}),
-          (("--aws-ecr",), {"help": "AWS ECR url to push the image"})),
+          (("-u", "--username"), {"help": "Docker Hub username"}),
+          (("-p", "--password"), {"help": "Docker Hub password"}),
+          (("--aws-ecr",), {"help": "URL of AWS ECR server that you need to login"})),
     parser_opts={"help": "Push docker image"}
 )
 def push(*args, **kwargs) -> List[List[str]]:
@@ -45,6 +47,9 @@ def push(*args, **kwargs) -> List[List[str]]:
         token = ecr_client.get_authorization_token()
         username, password = base64.b64decode(token['authorizationData'][0]['authorizationToken']).decode().split(':')
         cmds += [shlex.split(f"docker login -u {username} -p {password} {kwargs['aws_ecr']}")]
+
+    if kwargs["username"] and kwargs["password"]:
+        cmds += [shlex.split(f"docker login -u {kwargs['username']} -p {kwargs['password']}")]
 
     cmds += [shlex.split(f"docker push {kwargs['tag']}") + list(args)]
 
