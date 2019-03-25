@@ -17,7 +17,7 @@ logger = logging.getLogger("cli")
 
 
 @command(
-    command_type=Type.SHELL,
+    command_type=Type.SHELL_WITH_HELP,
     args=(
         (("--extra-tag",), {"help": "Create additional tags", "nargs": "*"}),
         (("--cache",), {"help": "Docker cache file"}),
@@ -52,7 +52,7 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
 
 
 @command(
-    command_type=Type.SHELL,
+    command_type=Type.SHELL_WITH_HELP,
     args=(
         (("--extra-tag",), {"help": "Create additional tags", "nargs": "*"}),
         (("-u", "--username"), {"help": "Docker Hub username"}),
@@ -86,7 +86,7 @@ def push(*args, **kwargs) -> typing.List[typing.List[str]]:
 
 
 @command(
-    command_type=Type.SHELL,
+    command_type=Type.SHELL_WITH_HELP,
     args=(
         (
             ("-f", "--file"),
