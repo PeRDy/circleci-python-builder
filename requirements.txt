@@ -1,2 +1,3 @@
 clinner
 codecov
+boto3
