@@ -19,6 +19,7 @@ logger = logging.getLogger("cli")
 @command(
     command_type=Type.SHELL_WITH_HELP,
     args=(
+        (("-t", "--tag"), {"help": "Docker image tag"}),
         (("--extra-tag",), {"help": "Create additional tags", "nargs": "*"}),
         (("--cache",), {"help": "Docker cache file"}),
     ),
@@ -31,6 +32,7 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
     if kwargs["cache"] and os.path.exists(kwargs["cache"]):
         logger.info("Loading docker image from %s", kwargs["cache"])
         cmds += [shlex.split(f"docker load -i {kwargs['cache']}")]
+        cmds += load(file=kwargs["cache"])
 
     # Build
     if kwargs["cache"]:
@@ -39,22 +41,48 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
         cmds += [shlex.split(f"docker build {kwargs['tag']} .") + list(args)]
 
     # Extra tags
-    if kwargs["extra_tag"]:
-        cmds += [shlex.split(f"docker tag {kwargs['tag']} {t}") for t in kwargs["extra_tag"]]
+    cmds += tag(tag=kwargs["tag"], new_tag=kwargs["extra_tag"])
 
     # Cache built image
     if kwargs["cache"]:
         os.makedirs(os.path.dirname(kwargs["cache"]), exist_ok=True)
         logger.info("Saving docker image to %s", kwargs["cache"])
-        cmds += [shlex.split(f"docker save -o {kwargs['cache']} {kwargs['tag']}")]
+        cmds += save(tag=kwargs["tag"], file=kwargs["cache"])
 
     return cmds
 
 
 @command(
     command_type=Type.SHELL_WITH_HELP,
+    args=((("tag",), {"help": "Docker image tag"}), (("new_tag",), {"help": "New tag", "nargs": "+"})),
+    parser_opts={"help": "Tag docker image"},
+)
+def tag(*args, **kwargs) -> typing.List[typing.List[str]]:
+    return [shlex.split(f"docker tag {kwargs['tag']} {t}") for t in kwargs["new_tag"]]
+
+
+@command(
+    command_type=Type.SHELL_WITH_HELP,
+    args=((("tag",), {"help": "Docker image tag"}), (("file",), {"help": "File path"})),
+    parser_opts={"help": "Save docker image to file"},
+)
+def save(*args, **kwargs) -> typing.List[typing.List[str]]:
+    return [shlex.split(f"docker save -o {kwargs['file']} {kwargs['tag']}")]
+
+
+@command(
+    command_type=Type.SHELL_WITH_HELP,
+    args=((("file",), {"help": "File path"}),),
+    parser_opts={"help": "Load docker image from file"},
+)
+def load(*args, **kwargs) -> typing.List[typing.List[str]]:
+    return [shlex.split(f"docker load -i {kwargs['file']}")]
+
+
+@command(
+    command_type=Type.SHELL_WITH_HELP,
     args=(
-        (("--extra-tag",), {"help": "Create additional tags", "nargs": "*"}),
+        (("-t", "--tag"), {"help": "Tags to push", "nargs": "+"}),
         (("-u", "--username"), {"help": "Docker Hub username"}),
         (("-p", "--password"), {"help": "Docker Hub password"}),
         (("--aws-ecr",), {"help": "URL of AWS ECR server that you need to login"}),
@@ -75,12 +103,8 @@ def push(*args, **kwargs) -> typing.List[typing.List[str]]:
     if kwargs["username"] and kwargs["password"]:
         cmds += [shlex.split(f"docker login -u {kwargs['username']} -p {kwargs['password']}")]
 
-    # Push image
-    cmds += [shlex.split(f"docker push {kwargs['tag']}") + list(args)]
-
-    # Push extra tags
-    if kwargs["extra_tag"]:
-        cmds += [shlex.split(f"docker push {t}") + list(args) for t in kwargs["extra_tag"]]
+    # Push tags
+    cmds += [shlex.split(f"docker push {t}") + list(args) for t in kwargs["tag"]]
 
     return cmds
 
@@ -92,7 +116,7 @@ def push(*args, **kwargs) -> typing.List[typing.List[str]]:
             ("-f", "--file"),
             {
                 "help": "Deployment file or directory where the k8s manifests are located. Manifests will be "
-                        "pre-processed and environment variables will be substituted inplace before applying",
+                "pre-processed and environment variables will be substituted inplace before applying",
                 "required": True,
             },
         ),
