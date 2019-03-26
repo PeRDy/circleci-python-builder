@@ -41,7 +41,8 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
         cmds += [shlex.split(f"docker build {kwargs['tag']} .") + list(args)]
 
     # Extra tags
-    cmds += tag(tag=kwargs["tag"], new_tag=kwargs["extra_tag"])
+    if kwargs["extra_tag"]:
+        cmds += tag(tag=kwargs["tag"], new_tag=kwargs["extra_tag"])
 
     # Cache built image
     if kwargs["cache"]:
