@@ -1,3 +1,4 @@
 clinner
 codecov
 boto3
+jinja2
