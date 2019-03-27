@@ -33,9 +33,8 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
     if kwargs["cache_from"] and os.path.exists(kwargs["cache_from"]):
         logger.info("Loading docker image from %s", kwargs["cache_from"])
         cmds += load(file=kwargs["cache_from"])
-        cmds += [shlex.split(f"docker build --cache-from={kwargs['tag']} -t {kwargs['tag']} .") + list(args)]
-    else:
-        cmds += [shlex.split(f"docker build -t {kwargs['tag']} .") + list(args)]
+
+    cmds += [shlex.split(f"docker build -t {kwargs['tag']} .") + list(args)]
 
     # Extra tags
     if kwargs["extra_tag"]:
@@ -74,7 +73,11 @@ def save(*args, **kwargs) -> typing.List[typing.List[str]]:
     parser_opts={"help": "Load docker image from file"},
 )
 def load(*args, **kwargs) -> typing.List[typing.List[str]]:
-    return [shlex.split(f"docker load -i {kwargs['file']}")]
+    if os.path.exists(kwargs["file"]):
+        return [shlex.split(f"docker load -i {kwargs['file']}")]
+
+    logger.error("File not found: %s", kwargs["file"])
+    return []
 
 
 @command(
