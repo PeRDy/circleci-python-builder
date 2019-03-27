@@ -9,7 +9,7 @@ import tempfile
 import os
 import typing
 
-import boto3
+# import boto3
 from clinner.command import Type, command
 from clinner.run.main import Main
 
@@ -19,36 +19,33 @@ logger = logging.getLogger("cli")
 @command(
     command_type=Type.SHELL_WITH_HELP,
     args=(
-        (("-t", "--tag"), {"help": "Docker image tag"}),
+        (("-t", "--tag"), {"help": "Docker image tag", "required": True}),
         (("--extra-tag",), {"help": "Create additional tags", "nargs": "*"}),
-        (("--cache",), {"help": "Docker cache file"}),
+        (("--cache-from",), {"help": "Docker cache file to read"}),
+        (("--store-image",), {"help": "Path to store Docker image"}),
     ),
     parser_opts={"help": "Build docker image"},
 )
 def build(*args, **kwargs) -> typing.List[typing.List[str]]:
     cmds = []
 
-    # Load cached image
-    if kwargs["cache"] and os.path.exists(kwargs["cache"]):
-        logger.info("Loading docker image from %s", kwargs["cache"])
-        cmds += [shlex.split(f"docker load -i {kwargs['cache']}")]
-        cmds += load(file=kwargs["cache"])
-
-    # Build
-    if kwargs["cache"]:
+    # Load cached image if proceed and build
+    if kwargs["cache_from"] and os.path.exists(kwargs["cache_from"]):
+        logger.info("Loading docker image from %s", kwargs["cache_from"])
+        cmds += load(file=kwargs["cache_from"])
         cmds += [shlex.split(f"docker build --cache-from={kwargs['tag']} -t {kwargs['tag']} .") + list(args)]
     else:
-        cmds += [shlex.split(f"docker build {kwargs['tag']} .") + list(args)]
+        cmds += [shlex.split(f"docker build -t {kwargs['tag']} .") + list(args)]
 
     # Extra tags
     if kwargs["extra_tag"]:
         cmds += tag(tag=kwargs["tag"], new_tag=kwargs["extra_tag"])
 
     # Cache built image
-    if kwargs["cache"]:
-        os.makedirs(os.path.dirname(kwargs["cache"]), exist_ok=True)
-        logger.info("Saving docker image to %s", kwargs["cache"])
-        cmds += save(tag=kwargs["tag"], file=kwargs["cache"])
+    if kwargs["store_image"]:
+        os.makedirs(os.path.dirname(kwargs["store_image"]), exist_ok=True)
+        logger.info("Saving docker image to %s", kwargs["store_image"])
+        cmds += save(tag=kwargs["tag"], file=kwargs["store_image"])
 
     return cmds
 
