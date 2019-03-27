@@ -9,7 +9,7 @@ import tempfile
 import os
 import typing
 
-# import boto3
+import boto3
 from clinner.command import Type, command
 from clinner.run.main import Main
 
@@ -43,7 +43,6 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
 
     # Cache built image
     if kwargs["store_image"]:
-        os.makedirs(os.path.dirname(kwargs["store_image"]), exist_ok=True)
         logger.info("Saving docker image to %s", kwargs["store_image"])
         cmds += save(tag=kwargs["tag"], file=kwargs["store_image"])
 
@@ -65,6 +64,7 @@ def tag(*args, **kwargs) -> typing.List[typing.List[str]]:
     parser_opts={"help": "Save docker image to file"},
 )
 def save(*args, **kwargs) -> typing.List[typing.List[str]]:
+    os.makedirs(os.path.dirname(kwargs["file"]), exist_ok=True)
     return [shlex.split(f"docker save -o {kwargs['file']} {kwargs['tag']}")]
 
 
