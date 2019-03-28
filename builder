@@ -86,7 +86,7 @@ def load(*args, **kwargs) -> typing.List[typing.List[str]]:
         (("-t", "--tag"), {"help": "Tags to push", "nargs": "+"}),
         (("-u", "--username"), {"help": "Docker Hub username"}),
         (("-p", "--password"), {"help": "Docker Hub password"}),
-        (("--aws-ecr",), {"help": "URL of AWS ECR server that you need to login"}),
+        (("--aws-ecr",), {"help": "Login to AWS ECR", "action": "store_true"}),
     ),
     parser_opts={"help": "Push docker image"},
 )
@@ -95,10 +95,11 @@ def push(*args, **kwargs) -> typing.List[typing.List[str]]:
 
     # Login to AWS ECR using aws credentials
     if kwargs["aws_ecr"]:
-        ecr_client = boto3.client("ecr", region_name="eu-west-1")
-        token = ecr_client.get_authorization_token()
-        username, password = base64.b64decode(token["authorizationData"][0]["authorizationToken"]).decode().split(":")
-        cmds += [shlex.split(f"docker login -u {username} -p {password} {kwargs['aws_ecr']}")]
+        ecr_client = boto3.client("ecr")
+        token = ecr_client.get_authorization_token()["authorizationData"][0]
+        username, password = base64.b64decode(token["authorizationToken"]).decode().split(":")
+        url = token["proxyEndpoint"]
+        cmds += [shlex.split(f"docker login -u {username} -p {password} {url}")]
 
     # Login to Docker hub
     if kwargs["username"] and kwargs["password"]:
