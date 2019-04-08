@@ -4,16 +4,70 @@
 import base64
 import logging
 import shlex
+import subprocess
 import sys
 import tempfile
 import os
 import typing
+from urllib.parse import urlparse
 
 import boto3
+import jinja2
+import requests
 from clinner.command import Type, command
 from clinner.run.main import Main
 
 logger = logging.getLogger("cli")
+
+
+class TemporaryRemoteFile:
+    CHUNK_SIZE = 10000
+
+    def __init__(self, uri: str):
+        """
+        Creates a temporary copy of a file from a local path or remote URI.
+
+        :param uri: File local path or remote URI.
+        """
+        self.uri = urlparse(uri)
+        self._file = tempfile.NamedTemporaryFile()
+
+    def _get_content_from_file(self) -> typing.Generator[bytes, typing.Any, None]:
+        with open(self.uri.geturl(), "rb") as file:
+            return (i for i in file.read())
+
+    def _get_content_from_http(self) -> typing.Generator[bytes, typing.Any, None]:
+        with requests.get(self.uri.geturl(), stream=True) as file:
+            return file.iter_content()
+
+    def _get_content_from_s3(self) -> typing.Generator[bytes, typing.Any, None]:
+        bucket = boto3.resource('s3').Object(bucket_name=self.uri.netloc, key=self.uri.path.lstrip("/"))
+        return bucket.get()["Body"]
+
+    def get_content(self) -> typing.Generator[bytes, typing.Any, None]:
+        if self.uri.scheme == "":
+            return self._get_content_from_file()
+        elif self.uri.scheme in ("http", "https"):
+            return self._get_content_from_http()
+        elif self.uri.scheme == "s3":
+            return self._get_content_from_s3()
+        else:
+            raise ValueError(f"Unknown URI scheme for {self.uri}")
+
+    def __enter__(self):
+        if self._file.closed:
+            raise ValueError("Cannot enter context with closed file")
+
+        self._file.__enter__()
+
+        with open(self._file.name, "wb") as file:
+            for byte in self.get_content():
+                file.write(byte)
+
+        return self._file
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._file.__exit__(exc_type, exc_val, exc_tb)
 
 
 @command(
@@ -112,57 +166,53 @@ def push(*args, **kwargs) -> typing.List[typing.List[str]]:
 
 
 @command(
-    command_type=Type.SHELL_WITH_HELP,
+    command_type=Type.PYTHON,
     args=(
         (
-            ("-f", "--file"),
+            ("manifest", ),
             {
-                "help": "Deployment file or directory where the k8s manifests are located. Manifests will be "
-                "pre-processed and environment variables will be substituted inplace before applying",
-                "required": True,
+                "help": "Directory or list of directories where the k8s manifests are located. Manifests are jinja2 "
+                        "templates and will be rendered before applying",
+                "nargs": "+",
             },
         ),
+        (("-c", "--config"), {"help": "Kubectl config file"}),
     ),
-    parser_opts={"help": "Deploy to AWS EKS"},
+    parser_opts={"help": "Deploy to kubernetes processing manifest files and applying them using kubectl."},
 )
-def kubernetes_deploy(*args, **kwargs) -> typing.List[typing.List[str]]:
-    """
-    Apply resource files on Kubernetes cluster. Manifests are specified using --file argument, which can also be a
-    directory containing several k8s manifests.
-
-    Note that manifests will be pre-processed and environment variables will be substituted inplace before applying.
-    """
-    valid_ext = (".json", ".yaml", ".yml")
-    deploy_path = kwargs["file"]
-    manifests = []
-    if os.path.isdir(deploy_path):
-        manifests = [
-            manifest
-            for manifest in os.listdir(deploy_path)
-            if os.path.isfile(os.path.join(deploy_path, manifest)) and os.path.splitext(manifest)[1] in valid_ext
-        ]
-    elif os.path.isfile(deploy_path) and os.path.splitext(deploy_path)[1] in valid_ext:
-        manifests = [deploy_path]
+def kubernetes_deploy(*args, **kwargs):
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(kwargs["manifest"]))
+    manifests = env.list_templates(filter_func=lambda x: "/" not in x and '.' in x and x.rsplit('.', 1)[1] in ("json", "yaml", "yml"))
 
     if not manifests:
-        raise FileNotFoundError(f"No json/yaml/yml manifests were found on path '{deploy_path}'")
+        raise FileNotFoundError(f"No manifests were found")
 
-    logger.info(f"Collected manifests: {manifests}")
-    out_d = tempfile.mkdtemp()
-    for mf in manifests:
-        with open(os.path.join(deploy_path, mf), "r") as y, tempfile.NamedTemporaryFile(
-            "w", dir=out_d, delete=False, suffix=f"_{mf}"
-        ) as out:
-            logger.info(f"Replacing {y.name} -> {out.name}")
-            out.write(os.path.expandvars(y.read()))
+    logger.info("Collected manifests: %s", ", ".join(manifests))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for manifest in manifests:
+            with open(os.path.join(tmpdir, manifest), "w") as out:
+                logger.info("Rendering manifest %s", manifest)
+                out.write(env.get_template(manifest).render(env=os.environ))
 
-    return [shlex.split(f"kubectl apply -v 3 -o yaml -f {out_d}")]
+        # Apply all manifests
+        cmd = shlex.split(f"kubectl apply -v 3 -o yaml -f {tmpdir}")
+        if kwargs["config"]:
+            cmd.insert(1, "--kubeconfig")
+            cmd.insert(2, kwargs["config"])
+
+        subprocess.run(cmd)
 
 
 class Builder(Main):
     def add_arguments(self, parser: "argparse.ArgumentParser"):
-        parser.add_argument("-t", "--tag", help="Docker image tag", default="latest")
+        verbose_group = parser.add_mutually_exclusive_group()
+        verbose_group.add_argument(
+            "-q", "--quiet", action="store_true", help="Quiet mode. No standard output other than executed application"
+        )
+        verbose_group.add_argument(
+            "-v", "--verbose", action="count", default=1, help="Verbose level (This option is additive)"
+        )
 
 
 if __name__ == "__main__":
-    sys.exit(Builder().run(verbose=1))
+    sys.exit(Builder().run())
