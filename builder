@@ -41,7 +41,7 @@ class TemporaryRemoteFile:
             return file.iter_content()
 
     def _get_content_from_s3(self) -> typing.Generator[bytes, typing.Any, None]:
-        bucket = boto3.resource('s3').Object(bucket_name=self.uri.netloc, key=self.uri.path.lstrip("/"))
+        bucket = boto3.resource("s3").Object(bucket_name=self.uri.netloc, key=self.uri.path.lstrip("/"))
         return bucket.get()["Body"]
 
     def get_content(self) -> typing.Generator[bytes, typing.Any, None]:
@@ -74,7 +74,7 @@ class TemporaryRemoteFile:
     command_type=Type.SHELL_WITH_HELP,
     args=(
         (("-t", "--tag"), {"help": "Docker image tag", "required": True}),
-        (("--extra-tag",), {"help": "Create additional tags", "nargs": "*"}),
+        (("--extra-tag",), {"help": "Create additional tags", "action": "append"}),
         (("--cache-from",), {"help": "Docker cache file to read"}),
         (("--store-image",), {"help": "Path to store Docker image"}),
     ),
@@ -104,7 +104,7 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
 
 @command(
     command_type=Type.SHELL_WITH_HELP,
-    args=((("tag",), {"help": "Docker image tag"}), (("new_tag",), {"help": "New tag", "nargs": "+"})),
+    args=((("tag",), {"help": "Docker image tag"}), (("new_tag",), {"help": "New tag", "action": "append"})),
     parser_opts={"help": "Tag docker image"},
 )
 def tag(*args, **kwargs) -> typing.List[typing.List[str]]:
@@ -137,7 +137,7 @@ def load(*args, **kwargs) -> typing.List[typing.List[str]]:
 @command(
     command_type=Type.SHELL_WITH_HELP,
     args=(
-        (("-t", "--tag"), {"help": "Tags to push", "nargs": "+"}),
+        (("-t", "--tag"), {"help": "Tags to push", "action": "append"}),
         (("-u", "--username"), {"help": "Docker Hub username"}),
         (("-p", "--password"), {"help": "Docker Hub password"}),
         (("--aws-ecr",), {"help": "Login to AWS ECR", "action": "store_true"}),
@@ -169,10 +169,10 @@ def push(*args, **kwargs) -> typing.List[typing.List[str]]:
     command_type=Type.PYTHON,
     args=(
         (
-            ("manifest", ),
+            ("manifest",),
             {
                 "help": "Directory or list of directories where the k8s manifests are located. Manifests are jinja2 "
-                        "templates and will be rendered before applying",
+                "templates and will be rendered before applying",
                 "nargs": "+",
             },
         ),
@@ -182,7 +182,9 @@ def push(*args, **kwargs) -> typing.List[typing.List[str]]:
 )
 def kubernetes_deploy(*args, **kwargs):
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(kwargs["manifest"]))
-    manifests = env.list_templates(filter_func=lambda x: "/" not in x and '.' in x and x.rsplit('.', 1)[1] in ("json", "yaml", "yml"))
+    manifests = env.list_templates(
+        filter_func=lambda x: "/" not in x and "." in x and x.rsplit(".", 1)[1] in ("json", "yaml", "yml")
+    )
 
     if not manifests:
         raise FileNotFoundError(f"No manifests were found")
