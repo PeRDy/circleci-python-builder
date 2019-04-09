@@ -104,7 +104,7 @@ def build(*args, **kwargs) -> typing.List[typing.List[str]]:
 
 @command(
     command_type=Type.SHELL_WITH_HELP,
-    args=((("tag",), {"help": "Docker image tag"}), (("new_tag",), {"help": "New tag", "action": "append"})),
+    args=((("tag",), {"help": "Docker image tag"}), (("new_tag",), {"help": "New tag", "nargs": "+"})),
     parser_opts={"help": "Tag docker image"},
 )
 def tag(*args, **kwargs) -> typing.List[typing.List[str]]:
